@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Image Graph</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+        
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        .coordinate-label {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xffffff, 1);
+        document.getElementById('container').appendChild(renderer.domElement);
+
+        // Lighting - simplified to avoid dimming effects
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0); // Increased to full brightness
+        scene.add(ambientLight);
+
+        // Orbit controls (simplified implementation)
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let targetX = 0, targetY = 0;
+        let cameraDistance = 15;
+
+        // Architectural precedent data from your spectrum analysis
+        const imageData = [
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Screenshot%202025-09-19%20130314.png',
+                position: [-3.5, 2.8, 1.5],
+                label: 'Moduli 255 (-3.5,2.8,1.5)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Screenshot%202025-09-17%20140200.png',
+                position: [-3.2, 3.5, -0.5],
+                label: 'Mimesis Museum (-3.2,3.5,-0.5)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Screenshot%202025-09-17%20140007.png',
+                position: [-1.8, 1.2, 0.8],
+                label: 'Church of Light (-1.8,1.2,0.8)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/images%20(5).jpeg',
+                position: [-2.8, 0.5, 2.2],
+                label: 'House A (-2.8,0.5,2.2)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Screenshot%202025-09-16%20214800.png',
+                position: [1.8, 0.8, -0.2],
+                label: 'Ghost Houses (1.8,0.8,-0.2)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/54a17e5d1eae925c60b8e70d1d58d928.jpg',
+                position: [4.2, 1.8, -2.5],
+                label: 'Guggenheim Helsinki (4.2,1.8,-2.5)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Villa-Mairea-Noormarkku-1939-living-room-photo-maija-holma-alvar-aalto-museum_av-1982-988x659.jpg',
+                position: [-1.2, -0.5, 2.8],
+                label: 'Villa Mairea (-1.2,-0.5,2.8)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/tzakashi-murakami-stepping-on-the-tail-of-a-rainbow-the-broad-1.jpg',
+                position: [3.8, -3.2, -2.8],
+                label: 'Murakami Installation (3.8,-3.2,-2.8)'
+            },
+            { 
+                url: 'https://raw.githubusercontent.com/KRATUS01/thesisimages/refs/heads/main/Screenshot%202025-09-19%20143639.png',
+                position: [-0.8, -1.8, 1.8],
+                label: 'Botanical Pavilion (-0.8,-1.8,1.8)'
+            }
+        ];
+
+        // Create image planes and labels
+        const imageGroup = new THREE.Group();
+        scene.add(imageGroup);
+
+        imageData.forEach((data, index) => {
+            const loader = new THREE.TextureLoader();
+            loader.load(data.url, (texture) => {
+                // Create image plane
+                const geometry = new THREE.PlaneGeometry(1, 0.75);
+                const material = new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+                const plane = new THREE.Mesh(geometry, material);
+                
+                // Position the plane
+                plane.position.set(data.position[0], data.position[1], data.position[2]);
+                
+                // Make plane always face camera
+                plane.lookAt(camera.position);
+                
+                imageGroup.add(plane);
+
+                // Create coordinate label
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 64;
+                
+                context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = '#333';
+                context.font = '16px Arial';
+                context.textAlign = 'center';
+                context.fillText(data.label, canvas.width/2, canvas.height/2 + 6);
+                
+                const labelTexture = new THREE.CanvasTexture(canvas);
+                const labelGeometry = new THREE.PlaneGeometry(0.75, 0.2);
+                const labelMaterial = new THREE.MeshBasicMaterial({ 
+                    map: labelTexture,
+                    transparent: true
+                });
+                const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+                
+                // Position label below image
+                labelMesh.position.set(
+                    data.position[0], 
+                    data.position[1] - 0.6, 
+                    data.position[2]
+                );
+                
+                imageGroup.add(labelMesh);
+            });
+        });
+
+        // Create coordinate system axes (both positive and negative)
+        const createAxis = (color, direction, length = 8) => {
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(...direction.map(d => d * -length)),
+                new THREE.Vector3(...direction.map(d => d * length))
+            ]);
+            const material = new THREE.LineBasicMaterial({ color: color });
+            return new THREE.Line(geometry, material);
+        };
+
+        // Add axes
+        scene.add(createAxis(0x000000, [1, 0, 0])); // X-axis (black)
+        scene.add(createAxis(0x000000, [0, 1, 0])); // Y-axis (black)
+        scene.add(createAxis(0x000000, [0, 0, 1])); // Z-axis (black)
+
+        // Add axis labels - now stored in array to track for rotation
+        const axisLabels = [];
+        const addAxisLabel = (text, position, color) => {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 128; // Doubled from 64 to 128
+            canvas.height = 64;
+            
+            context.fillStyle = color;
+            context.font = 'bold 24px Arial';
+            context.textAlign = 'center';
+            context.fillText(text, 64, 40); // Centered at 64 instead of 32
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const geometry = new THREE.PlaneGeometry(2.0, 1.0); // Doubled size from 1.0x0.5 to 2.0x1.0
+            const material = new THREE.MeshBasicMaterial({ 
+                map: texture,
+                transparent: true
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(...position);
+            scene.add(mesh);
+            axisLabels.push(mesh); // Add to array for rotation tracking
+        };
+
+        addAxisLabel('Maximal', [7, 0, 0], '#000000');
+        addAxisLabel('Minimal', [-7, 0, 0], '#000000');
+        addAxisLabel('Control', [0, 7, 0], '#000000');
+        addAxisLabel('Chaos', [0, -7, 0], '#000000');
+        addAxisLabel('Acclimated', [0, 0, 7], '#000000');
+        addAxisLabel('Estranged', [0, 0, -7], '#000000');
+
+        // Camera positioning
+        camera.position.set(10, 10, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Mouse/touch controls
+        function onMouseMove(event) {
+            if (!isMouseDown) return;
+            
+            const deltaX = event.clientX - mouseX;
+            const deltaY = event.clientY - mouseY;
+            
+            targetX += deltaX * 0.01;
+            targetY += deltaY * 0.01;
+            
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseDown(event) {
+            isMouseDown = true;
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        }
+
+        function onMouseUp() {
+            isMouseDown = false;
+        }
+
+        function onWheel(event) {
+            cameraDistance += event.deltaY * 0.01;
+            cameraDistance = Math.max(5, Math.min(50, cameraDistance));
+        }
+
+        // Event listeners
+        renderer.domElement.addEventListener('mousemove', onMouseMove);
+        renderer.domElement.addEventListener('mousedown', onMouseDown);
+        renderer.domElement.addEventListener('mouseup', onMouseUp);
+        renderer.domElement.addEventListener('wheel', onWheel);
+
+        // Touch controls for mobile
+        let touchStartX = 0, touchStartY = 0;
+        renderer.domElement.addEventListener('touchstart', (event) => {
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+        });
+
+        renderer.domElement.addEventListener('touchmove', (event) => {
+            event.preventDefault();
+            const deltaX = event.touches[0].clientX - touchStartX;
+            const deltaY = event.touches[0].clientY - touchStartY;
+            
+            targetX += deltaX * 0.01;
+            targetY += deltaY * 0.01;
+            
+            touchStartX = event.touches[0].clientX;
+            touchStartY = event.touches[0].clientY;
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Smooth camera movement
+            const x = Math.cos(targetX) * Math.cos(targetY) * cameraDistance;
+            const y = Math.sin(targetY) * cameraDistance;
+            const z = Math.sin(targetX) * Math.cos(targetY) * cameraDistance;
+            
+            camera.position.set(x, y, z);
+            camera.lookAt(0, 0, 0);
+            
+            // Make image planes and labels face camera
+            imageGroup.children.forEach((child, index) => {
+                child.lookAt(camera.position);
+            });
+            
+            // Make axis labels face camera
+            axisLabels.forEach(label => {
+                label.lookAt(camera.position);
+            });
+            
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
